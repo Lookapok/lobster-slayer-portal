@@ -4,14 +4,14 @@ from datetime import datetime
 import requests
 
 # 頁面配置
-st.set_page_config(page_title="小希｜三角洲撤離大師 - 專業報單門戶", layout="wide")
+st.set_page_config(page_title="小希｜三角洲撤離大師 - 智能報單系統", layout="wide")
 
 # 配置區域
 STAFF_URL = "https://docs.google.com/spreadsheets/d/1zbJKbDKVg4qX1pCjQn0zr5WSfpFk2NQtRlzpZ7OAarE/export?format=csv&gid=1135665106"
 ORDERS_URL = "https://docs.google.com/spreadsheets/d/1zbJKbDKVg4qX1pCjQn0zr5WSfpFk2NQtRlzpZ7OAarE/export?format=csv&gid=1411132681"
 GAS_URL = "https://script.google.com/macros/s/AKfycbz2BdC_RM2iq6xVSzZfT1dHMPmGH7r_pG9OdBo9wtHPkJMac6z539ERT4q4g7LB5l4/exec"
 
-# 項目數據庫
+# 項目數據庫 (與老大提供的價格對齊)
 ITEMS_DATA = {
     "台服-體驗單($300/300W)": 300,
     "台服-基礎保底($500/588W)": 500,
@@ -27,7 +27,7 @@ ITEMS_DATA = {
     "陸服-航天計時($1,200/小時)": 1200,
     "陸服-航天基礎($1,400/788W)": 1400,
     "陸服-航天進階($2,800/1,688W)": 2800,
-    "其他自定義": 0
+    "自定義項目": 0
 }
 
 def get_staff_data():
@@ -61,7 +61,8 @@ if st.session_state['user_type'] is None:
             if password == "dk888":
                 st.session_state['user_type'] = "admin"
                 st.rerun()
-            else: st.error("密碼錯誤！")
+            else:
+                st.error("密碼錯誤！")
     else:
         player_id = st.text_input("輸入您的 打手 ID")
         player_pwd = st.text_input("輸入您的 打手 密碼", type="password")
@@ -84,7 +85,7 @@ else:
     
     with st.container():
         col_t, col_l = st.columns([8, 2])
-        col_t.title(f"🛡️ {'管理中心' if user_type == 'admin' else '打手對帳中心 - ' + user_id}")
+        col_t.title(f"🛡️ {'管理中心' if user_type == 'admin' else '打手對帳 - ' + user_id}")
         if col_l.button("登出"):
             st.session_state['user_type'] = None
             st.rerun()
@@ -97,30 +98,27 @@ else:
             slayer_id = c2.text_input("打手 ID", value=user_id, disabled=True)
             rate_label = c3.text_input("分潤比例", value=f"{int(user_rate*100)}%", disabled=True)
             
-            # 第一排：客戶、項目、時數
             c4, c5, c5_time = st.columns([2, 3, 1])
             cust_id = c4.text_input("老闆 ID (必填)")
             item_selected = c5.selectbox("選擇護航項目", list(ITEMS_DATA.keys()))
             duration = c5_time.number_input("時數/次數", min_value=1, value=1)
             
             c6, c7, c8 = st.columns(3)
-            # 自動帶入預設單價並乘上時數
             base_price = ITEMS_DATA[item_selected]
-            default_total = base_price * duration
-            price = c6.number_input("總成交價 (可微調)", value=default_total)
+            discount = c6.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
             
-            # 折扣改為下拉選單
-            discount = c7.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
+            # --- 智能計算公式：(單價 * 時數) - 折扣 ---
+            total_after_discount = (base_price * duration) - discount
+            price_display = c7.number_input("最終成交價 (自動算好)", value=total_after_discount, disabled=True)
             
-            # 計算邏輯
-            net_price = price - discount
-            cut = int(net_price * user_rate)
-            profit = net_price - cut
-            c8.metric("預估結算 (您的薪資)", f"NT$ {cut}")
+            # 結算與利潤
+            cut = int(total_after_discount * user_rate)
+            profit = total_after_discount - cut
+            c8.metric("預估結算 (打手薪資)", f"NT$ {cut}")
             
             remark = st.text_area("備註")
             
-            if st.form_submit_button("🚀 確認提交"):
+            if st.form_submit_button("🚀 確認提交報單"):
                 if not cust_id:
                     st.error("請填寫老闆 ID！")
                 else:
@@ -130,7 +128,7 @@ else:
                         "rate_type": f"{int(user_rate*100)}%",
                         "customer_id": cust_id,
                         "item": f"{item_selected} (x{duration})",
-                        "price": price,
+                        "price": total_after_discount,
                         "discount": discount,
                         "slayer_cut": cut,
                         "profit": profit
@@ -138,10 +136,10 @@ else:
                     try:
                         resp = requests.post(GAS_URL, json=payload)
                         if resp.status_code == 200:
-                            st.success(f"報單成功！")
+                            st.success(f"報單成功！薪資 NT$ {cut} 已計入。")
                             st.balloons()
                         else: st.error("同步失敗")
-                    except: st.error("連線異常")
+                    except: st.error("連連線異常")
 
         st.divider()
         st.subheader("📅 我的報單歷史")
