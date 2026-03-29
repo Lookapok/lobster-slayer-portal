@@ -3,8 +3,8 @@ import pandas as pd
 from datetime import datetime
 import requests
 
-# 頁面配置
-st.set_page_config(page_title="小希｜三角洲撤離大師 - 智能報單系統", layout="wide")
+# 頁面配置 (鎖定黃金格式)
+st.set_page_config(page_title="小希｜三角洲撤離大師 - 專業報單門戶", layout="wide")
 
 # 配置區域
 STAFF_URL = "https://docs.google.com/spreadsheets/d/1zbJKbDKVg4qX1pCjQn0zr5WSfpFk2NQtRlzpZ7OAarE/export?format=csv&gid=1135665106"
@@ -42,11 +42,9 @@ if st.session_state['user_type'] is None:
     st.title("🦞 龍蝦門戶 - 登入系統")
     login_type = st.selectbox("身分", ["管理員 (Admin)", "打手 (Slayer)"])
     if login_type == "管理員 (Admin)":
-        pwd_input = st.text_input("密碼", type="password")
+        pwd_i = st.text_input("密碼", type="password")
         if st.button("登入"):
-            if pwd_input == "dk888":
-                st.session_state['user_type'] = "admin"; st.rerun()
-            else: st.error("密碼錯誤")
+            if pwd_i == "dk888": st.session_state['user_type'] = "admin"; st.rerun()
     else:
         pid = st.text_input("打手 ID")
         pwd = st.text_input("密碼", type="password")
@@ -54,62 +52,53 @@ if st.session_state['user_type'] is None:
             staff_df = get_staff_data()
             if pid in staff_df['打手ID'].astype(str).values:
                 user_row = staff_df[staff_df['打手ID'].astype(str) == pid].iloc[0]
-                # 兼容不同比例欄位名稱
                 rate_col = [c for c in staff_df.columns if '比例' in c][0]
-                st.session_state['user_type'] = "slayer"
-                st.session_state['user_id'] = pid
+                st.session_state['user_type'] = "slayer"; st.session_state['user_id'] = pid
                 st.session_state['user_rate'] = float(user_row[rate_col])
                 st.rerun()
-            else: st.error("找不到該打手 ID")
 else:
     user_type = st.session_state['user_type']
     if st.sidebar.button("登出"): st.session_state['user_type'] = None; st.rerun()
 
     if user_type == "slayer":
-        st.title(f"🦞 打手報單 - {st.session_state['user_id']}")
+        st.title(f"🛡️ 打手到帳 - {st.session_state['user_id']}")
+        st.subheader("📝 提交新報單")
         
-        # --- 完全複刻老大要求的版面 ---
-        c1, c2, c3 = st.columns([2, 4, 1])
-        cust_id = c1.text_input("老闆 ID")
-        item = c2.selectbox("項目", list(ITEMS_DATA.keys()))
-        dur = c3.number_input("時數", min_value=1, value=1)
-        
-        disc = st.selectbox("折扣", [0, 50, 100, 150, 200, 300])
-        
-        # 智能動態計算
-        total_price = (ITEMS_DATA[item] * dur) - disc
-        user_cut = int(total_price * st.session_state['user_rate'])
-        
-        st.write("")
-        # 這裡用 HTML 呈現跟截圖一模一樣的文字風格
-        st.markdown(f"### 最終成交價: <span style='color:#2E7D32;'>{total_price}</span>  |  您的結算: <span style='color:#1976D2;'>{user_cut}</span>", unsafe_allow_html=True)
-        
-        if st.button("🚀 確認提交"):
-            if not cust_id:
-                st.error("請填寫老闆 ID")
-            else:
-                payload = {
-                    "date": datetime.now().strftime("%Y-%m-%d"),
-                    "slayer_id": st.session_state['user_id'],
-                    "rate_type": f"{int(st.session_state['user_rate']*100)}%",
-                    "customer_id": cust_id,
-                    "item": f"{item} (x{dur})",
-                    "price": total_price,
-                    "discount": disc,
-                    "slayer_cut": user_cut,
-                    "profit": total_price - user_cut
-                }
-                try:
-                    requests.post(GAS_URL, json=payload)
-                    st.success("報單成功！")
-                    st.balloons()
-                except: st.error("連線異常")
+        # --- 鎖定黃金格式排版 ---
+        with st.container():
+            # 第一排：日期、打手ID、分潤比例
+            r1c1, r1c2, r1c3 = st.columns(3)
+            r1c1.text_input("日期", value=datetime.now().strftime("%Y/%m/%d"), disabled=True)
+            r1c2.text_input("打手 ID", value=st.session_state['user_id'], disabled=True)
+            r1c3.text_input("分潤比例", value=f"{int(st.session_state['user_rate']*100)}%", disabled=True)
+            
+            # 第二排：老闆 ID、護航項目、時數/次數
+            r2c1, r2c2, r2c3 = st.columns([2, 4, 1])
+            cust_id = r2c1.text_input("老闆 ID (必填)")
+            item = r2c2.selectbox("選擇護航項目", list(ITEMS_DATA.keys()))
+            dur = r2c3.number_input("時數/次數", min_value=1, value=1)
+            
+            # 第三排：折扣、最終成交價、預估結算
+            r3c1, r3c2, r3c3 = st.columns(3)
+            disc = r3c1.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
+            total_price = (ITEMS_DATA[item] * dur) - disc
+            r3c2.number_input("最終成交價 (自動算好)", value=total_price, disabled=True)
+            user_cut = int(total_price * st.session_state['user_rate'])
+            r3c3.write("預估結算 (打手薪資)")
+            r3c3.subheader(f"NT$ {user_cut}")
+            
+            # 第四排：備註
+            remark = st.text_area("備註")
+            
+            if st.button("🚀 確認提交報單"):
+                if not cust_id: st.error("請填寫老闆 ID")
+                else:
+                    payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{int(st.session_state['user_rate']*100)}%", "customer_id": cust_id, "item": f"{item} (x{dur})", "price": total_price, "discount": disc, "slayer_cut": user_cut, "profit": total_price - user_cut}
+                    try: requests.post(GAS_URL, json=payload); st.success("報單成功！"); st.balloons()
+                    except: st.error("同步失敗")
 
-        st.divider()
-        st.header("我的報單紀錄")
-        ord_df = get_orders_data()
-        if not ord_df.empty:
-            st.dataframe(ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']], use_container_width=True)
+        st.divider(); st.subheader("📅 我的報單歷史"); ord_df = get_orders_data()
+        if not ord_df.empty: st.dataframe(ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']], use_container_width=True)
 
     elif user_type == "admin":
         st.title("🛡️ 老闆總控後台")
@@ -119,13 +108,11 @@ else:
             m1.metric("今日總利潤", f"${df['公司利潤'].sum()}")
             m2.metric("待結算單數", len(df[df['結算狀態']=='待結算']))
             m3.metric("總單量", len(df))
-            
             st.subheader("💸 發薪審核")
             pending = df[df['結算狀態'] == '待結算']
             for idx, row in pending.iterrows():
                 col1, col2 = st.columns([8, 2])
                 col1.write(f"📅 {row['日期']} | 👤 {row['打手ID']} | 💰 ${row['結算金額']} ({row['項目']})")
                 if col2.button(f"✅ 發薪", key=f"p_{idx}"):
-                    requests.post(GAS_URL, json={"action": "update_status", "date": row['日期'], "slayer_id": str(row['打手ID']), "customer_id": str(row['老闆ID']), "new_status": "已結算"})
-                    st.rerun()
+                    requests.post(GAS_URL, json={"action": "update_status", "date": row['date'], "slayer_id": str(row['slayer_id']), "customer_id": str(row['customer_id']), "new_status": "已結算"}); st.rerun()
             st.divider(); st.subheader("歷史紀錄"); st.dataframe(df, use_container_width=True)
