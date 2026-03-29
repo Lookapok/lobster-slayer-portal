@@ -23,7 +23,7 @@ ITEMS_DATA = {
 
 def get_staff_data():
     try:
-        df = pd.read_csv(STAFF_URL)
+        df = pd.read_csv(f"{STAFF_URL}&cache={int(time.time())}")
         df.columns = df.columns.str.strip()
         for col in df.columns: df[col] = df[col].astype(str).str.strip()
         return df
@@ -31,8 +31,7 @@ def get_staff_data():
 
 def get_orders_data():
     try:
-        # 強制不使用緩存，抓取最新數據
-        df = pd.read_csv(f"{ORDERS_URL}&t={int(time.time())}")
+        df = pd.read_csv(f"{ORDERS_URL}&cache={int(time.time())}")
         df.columns = df.columns.str.strip()
         return df
     except: return pd.DataFrame()
@@ -89,12 +88,12 @@ else:
                 else:
                     payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{int(st.session_state['user_rate']*100)}%", "customer_id": cust_id, "item": f"{item} (x{dur})", "price": total_price, "discount": disc, "slayer_cut": user_cut, "profit": total_price - user_cut}
                     try: 
-                        requests.post(GAS_URL, json=payload, timeout=10)
-                        st.success("報單成功！已寫入雲端。")
+                        requests.post(GAS_URL, json=payload, timeout=15)
+                        st.success("報單成功！")
                         st.balloons()
-                        time.sleep(1)
+                        time.sleep(2)
                         st.rerun()
-                    except: st.error("同步失敗，請檢查網路連接")
+                    except: st.error("同步失敗，請刷新網頁再試")
         st.divider(); st.subheader("📅 我的報單歷史"); ord_df = get_orders_data()
         if not ord_df.empty and '打手ID' in ord_df.columns:
             st.dataframe(ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']], use_container_width=True)
@@ -104,17 +103,16 @@ else:
         if st.button("🔄 刷新雲端數據"): st.rerun()
         df = get_orders_data()
         if not df.empty:
-            m1, m2, m3 = st.columns(3)
-            # 強制轉換數值欄位，避免統計報錯
             df['單價'] = pd.to_numeric(df['單價'], errors='coerce').fillna(0)
             df['公司利潤'] = pd.to_numeric(df['公司利潤'], errors='coerce').fillna(0)
             df['結算金額'] = pd.to_numeric(df['結算金額'], errors='coerce').fillna(0)
-            
+            m1, m2, m3 = st.columns(3)
             m1.metric("總營收 (流水)", f"${int(df['單價'].sum())}")
             m2.metric("總利潤 (公司)", f"${int(df['公司利潤'].sum())}")
             m3.metric("待結算單數", len(df[df['結算狀態']=='待結算']))
             
             st.subheader("💸 發薪審核 (待結算清單)")
+            # 這裡進行強化：如果點擊後超時，網頁不跳錯，而是提示您去查看 Sheet
             pending = df[df['結算狀態'] == '待結算']
             if not pending.empty:
                 for idx, row in pending.iterrows():
@@ -123,12 +121,13 @@ else:
                     if col2.button(f"✅ 確認發薪", key=f"pay_btn_{idx}"):
                         payload = {"action": "update_status", "date": str(row['日期']), "slayer_id": str(row['打手ID']), "customer_id": str(row['老闆ID']), "new_status": "已結算"}
                         try:
-                            requests.post(GAS_URL, json=payload, timeout=10)
-                            st.success(f"已發放 {row['打手ID']} 薪資！系統正在更新...")
-                            time.sleep(1.5)
-                            st.rerun()
-                        except: st.error("發薪連線超時，請檢查 Google Sheet 狀態")
+                            # 增加超時時間並忽略回傳錯誤，因為 Sheet 端高機率已經改好了
+                            requests.post(GAS_URL, json=payload, timeout=20)
+                            st.success("指令已送達 Google，正在同步狀態...")
+                        except:
+                            st.warning("Google 回應較慢，請點選下方的『刷新數據』確認狀態。")
+                        time.sleep(2)
+                        st.rerun()
             else:
                 st.info("目前沒有待發薪資的單子。")
-            
             st.divider(); st.subheader("📜 全服歷史紀錄"); st.dataframe(df, use_container_width=True)
