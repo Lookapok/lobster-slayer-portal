@@ -24,6 +24,7 @@ def get_staff_data():
     try:
         df = pd.read_csv(STAFF_URL)
         df.columns = df.columns.str.strip()
+        for col in df.columns: df[col] = df[col].astype(str).str.strip()
         return df
     except: return pd.DataFrame()
 
@@ -56,6 +57,7 @@ if st.session_state['user_type'] is None:
                 st.session_state['user_type'] = "slayer"; st.session_state['user_id'] = pid
                 st.session_state['user_rate'] = float(user_row[rate_col])
                 st.rerun()
+            else: st.error("找不到該打手 ID")
 else:
     user_type = st.session_state['user_type']
     if st.sidebar.button("登出"): st.session_state['user_type'] = None; st.rerun()
@@ -63,22 +65,15 @@ else:
     if user_type == "slayer":
         st.title(f"🛡️ 打手到帳 - {st.session_state['user_id']}")
         st.subheader("📝 提交新報單")
-        
-        # --- 鎖定黃金格式排版 ---
         with st.container():
-            # 第一排：日期、打手ID、分潤比例
             r1c1, r1c2, r1c3 = st.columns(3)
             r1c1.text_input("日期", value=datetime.now().strftime("%Y/%m/%d"), disabled=True)
             r1c2.text_input("打手 ID", value=st.session_state['user_id'], disabled=True)
             r1c3.text_input("分潤比例", value=f"{int(st.session_state['user_rate']*100)}%", disabled=True)
-            
-            # 第二排：老闆 ID、護航項目、時數/次數
             r2c1, r2c2, r2c3 = st.columns([2, 4, 1])
             cust_id = r2c1.text_input("老闆 ID (必填)")
             item = r2c2.selectbox("選擇護航項目", list(ITEMS_DATA.keys()))
             dur = r2c3.number_input("時數/次數", min_value=1, value=1)
-            
-            # 第三排：折扣、最終成交價、預估結算
             r3c1, r3c2, r3c3 = st.columns(3)
             disc = r3c1.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
             total_price = (ITEMS_DATA[item] * dur) - disc
@@ -86,17 +81,13 @@ else:
             user_cut = int(total_price * st.session_state['user_rate'])
             r3c3.write("預估結算 (打手薪資)")
             r3c3.subheader(f"NT$ {user_cut}")
-            
-            # 第四排：備註
             remark = st.text_area("備註")
-            
             if st.button("🚀 確認提交報單"):
                 if not cust_id: st.error("請填寫老闆 ID")
                 else:
                     payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{int(st.session_state['user_rate']*100)}%", "customer_id": cust_id, "item": f"{item} (x{dur})", "price": total_price, "discount": disc, "slayer_cut": user_cut, "profit": total_price - user_cut}
                     try: requests.post(GAS_URL, json=payload); st.success("報單成功！"); st.balloons()
                     except: st.error("同步失敗")
-
         st.divider(); st.subheader("📅 我的報單歷史"); ord_df = get_orders_data()
         if not ord_df.empty: st.dataframe(ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']], use_container_width=True)
 
@@ -114,5 +105,7 @@ else:
                 col1, col2 = st.columns([8, 2])
                 col1.write(f"📅 {row['日期']} | 👤 {row['打手ID']} | 💰 ${row['結算金額']} ({row['項目']})")
                 if col2.button(f"✅ 發薪", key=f"p_{idx}"):
-                    requests.post(GAS_URL, json={"action": "update_status", "date": row['date'], "slayer_id": str(row['slayer_id']), "customer_id": str(row['customer_id']), "new_status": "已結算"}); st.rerun()
+                    # 修正這裡：使用正確的欄位名稱（中文）
+                    payload = {"action": "update_status", "date": row['日期'], "slayer_id": str(row['打手ID']), "customer_id": str(row['老闆ID']), "new_status": "已結算"}
+                    requests.post(GAS_URL, json=payload); st.rerun()
             st.divider(); st.subheader("歷史紀錄"); st.dataframe(df, use_container_width=True)
