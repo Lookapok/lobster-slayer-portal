@@ -12,18 +12,18 @@ STAFF_URL = "https://docs.google.com/spreadsheets/d/1zbJKbDKVg4qX1pCjQn0zr5WSfpF
 ORDERS_URL = "https://docs.google.com/spreadsheets/d/1zbJKbDKVg4qX1pCjQn0zr5WSfpFk2NQtRlzpZ7OAarE/export?format=csv&gid=1411132681"
 GAS_URL = "https://script.google.com/macros/s/AKfycbz2BdC_RM2iq6xVSzZfT1dHMPmGH7r_pG9OdBo9wtHPkJMac6z539ERT4q4g7LB5l4/exec"
 
-# --- 智能項目數據結構 ---
+# --- 智能項目數據結構 (更新版) ---
 PRICING_DATA = {
     "體驗單": {
         "台服": {
-            "🌟 體驗單 ($300)": 300,
-            "基礎保底 ($500)": 500,
-            "進階保底 ($1,000)": 1000
+            "體驗單：$300 (300W)": 300,
+            "體驗單：$500 (588W)": 500,
+            "體驗單：$1,000 (1,088W)": 1000
         },
         "陸服": {
-            "🌟 體驗單 ($350)": 350,
-            "基礎保底 ($600)": 600,
-            "進階保底 ($1,200)": 1200
+            "體驗單：$350 (300W)": 350,
+            "體驗單：$600 (588W)": 600,
+            "體驗單：$1,200 (1,088W)": 1200
         }
     },
     "護航單": {
@@ -63,7 +63,7 @@ def get_orders_data():
         return df
     except: return pd.DataFrame()
 
-# 登入邏輯
+# 1. 登入系統
 if 'user_type' not in st.session_state:
     st.session_state['user_type'] = None
 
@@ -72,12 +72,13 @@ if st.session_state['user_type'] is None:
     login_type = st.selectbox("請選擇登入身分", ["管理員 (Admin)", "打手 (Slayer)"])
     if login_type == "管理員 (Admin)":
         password = st.text_input("輸入管理密碼", type="password")
-        if st.button("管理員登入"):
+        if st.button("登入"):
             if password == "dk888": st.session_state['user_type'] = "admin"; st.rerun()
+            else: st.error("密碼錯誤！")
     else:
         player_id = st.text_input("輸入您的 打手 ID")
         player_pwd = st.text_input("輸入您的 打手 密碼", type="password")
-        if st.button("打手登入"):
+        if st.button("登入"):
             staff_df = get_staff_data()
             if not staff_df.empty and player_id.strip() in staff_df['打手ID'].values:
                 user_row = staff_df[staff_df['打手ID'] == player_id.strip()].iloc[0]
@@ -99,38 +100,28 @@ else:
         st.subheader("📝 提交新報單")
         
         with st.container():
-            # 第一排：日期 | 打手 ID | 分潤 (隱藏)
             r1c1, r1c2 = st.columns(2)
             r1c1.text_input("日期", value=datetime.now().strftime("%Y/%m/%d"), disabled=True)
             r1c2.text_input("打手 ID", value=st.session_state['user_id'], disabled=True)
             
-            # 第二排：老闆 ID | 類型連動選單
             r2c1, r2c2, r2c3, r2c4 = st.columns([2, 2, 2, 3])
             cust_id = r2c1.text_input("老闆 ID (必填)")
-            
-            # 第一層：選擇單量類型
             type_lvl1 = r2c2.selectbox("單量類型", ["體驗單", "護航單"])
             
             if type_lvl1 == "體驗單":
-                # 體驗單第二層：台服/陸服
                 region = r2c3.selectbox("區域", ["台服", "陸服"])
                 item_options = PRICING_DATA["體驗單"][region]
             else:
-                # 護航單第二層：地圖等級
                 map_lvl = r2c3.selectbox("地圖等級", ["常規", "機密", "絕密"])
                 item_options = PRICING_DATA["護航單"][map_lvl]
             
-            # 第三層：選擇具體細項
             item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
             
-            # 第三排：時數 | 折扣 | 最終成交價 | 預估結算
             r3c1, r3c2, r3c3, r3c4 = st.columns([1, 2, 2, 2])
             dur = r3c1.number_input("時數/次數", min_value=1, value=1)
             disc = r3c2.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
             
-            # 計算邏輯 (包含魔王/巔峰計時加乘)
             base_p = item_options[item_name]
-            # 魔王/巔峰邏輯：僅限計時單
             tier = st.session_state.get('user_tier', '普通')
             if "計時" in item_name:
                 if tier == "魔王": base_p = 1200 if "台服" in item_name or "常規" in item_name else 1500
@@ -142,7 +133,6 @@ else:
             r3c3.number_input("最終成交價 (自動算好)", value=total_price, disabled=True)
             r3c4.metric("預估結算 (您的薪資)", f"NT$ {user_cut}")
             
-            # 第四排：備註
             remark = st.text_area("備註")
             
             if st.button("🚀 確認提交報單"):
@@ -161,8 +151,10 @@ else:
         st.title("🛡️ 老闆總控後台")
         df = get_orders_data()
         if not df.empty:
+            df['單價'] = pd.to_numeric(df['單價'], errors='coerce').fillna(0)
+            df['公司利潤'] = pd.to_numeric(df['公司利潤'], errors='coerce').fillna(0)
             m1, m2, m3 = st.columns(3)
-            m1.metric("今日總營收", f"${int(pd.to_numeric(df['單價'], errors='coerce').sum())}")
-            m2.metric("總利潤", f"${int(pd.to_numeric(df['公司利潤'], errors='coerce').sum())}")
+            m1.metric("今日總營收", f"${int(df['單價'].sum())}")
+            m2.metric("總利潤", f"${int(df['公司利潤'].sum())}")
             m3.metric("總單量", len(df))
             st.dataframe(df, use_container_width=True)
