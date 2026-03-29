@@ -11,7 +11,7 @@ STAFF_URL = "https://docs.google.com/spreadsheets/d/1zbJKbDKVg4qX1pCjQn0zr5WSfpF
 ORDERS_URL = "https://docs.google.com/spreadsheets/d/1zbJKbDKVg4qX1pCjQn0zr5WSfpFk2NQtRlzpZ7OAarE/export?format=csv&gid=1411132681"
 GAS_URL = "https://script.google.com/macros/s/AKfycbz2BdC_RM2iq6xVSzZfT1dHMPmGH7r_pG9OdBo9wtHPkJMac6z539ERT4q4g7LB5l4/exec"
 
-# 項目數據庫 (與老大提供的價格對齊)
+# 項目數據庫
 ITEMS_DATA = {
     "台服-體驗單($300/300W)": 300,
     "台服-基礎保底($500/588W)": 500,
@@ -85,61 +85,63 @@ else:
     
     with st.container():
         col_t, col_l = st.columns([8, 2])
-        col_t.title(f"🛡️ {'管理中心' if user_type == 'admin' else '打手對帳 - ' + user_id}")
+        col_t.title(f"🛡️ {'管理中心' if user_type == 'admin' else '打手對帳中心 - ' + user_id}")
         if col_l.button("登出"):
             st.session_state['user_type'] = None
             st.rerun()
 
     if user_type == "slayer":
         st.subheader("📝 提交新報單")
-        with st.form("detailed_report", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            order_date = c1.date_input("日期", datetime.now())
-            slayer_id = c2.text_input("打手 ID", value=user_id, disabled=True)
-            rate_label = c3.text_input("分潤比例", value=f"{int(user_rate*100)}%", disabled=True)
-            
-            c4, c5, c5_time = st.columns([2, 3, 1])
-            cust_id = c4.text_input("老闆 ID (必填)")
-            item_selected = c5.selectbox("選擇護航項目", list(ITEMS_DATA.keys()))
-            duration = c5_time.number_input("時數/次數", min_value=1, value=1)
-            
-            c6, c7, c8 = st.columns(3)
-            base_price = ITEMS_DATA[item_selected]
-            discount = c6.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
-            
-            # --- 智能計算公式：(單價 * 時數) - 折扣 ---
-            total_after_discount = (base_price * duration) - discount
-            price_display = c7.number_input("最終成交價 (自動算好)", value=total_after_discount, disabled=True)
-            
-            # 結算與利潤
-            cut = int(total_after_discount * user_rate)
-            profit = total_after_discount - cut
-            c8.metric("預估結算 (打手薪資)", f"NT$ {cut}")
-            
-            remark = st.text_area("備註")
-            
-            if st.form_submit_button("🚀 確認提交報單"):
-                if not cust_id:
-                    st.error("請填寫老闆 ID！")
-                else:
-                    payload = {
-                        "date": order_date.strftime("%Y-%m-%d"),
-                        "slayer_id": user_id,
-                        "rate_type": f"{int(user_rate*100)}%",
-                        "customer_id": cust_id,
-                        "item": f"{item_selected} (x{duration})",
-                        "price": total_after_discount,
-                        "discount": discount,
-                        "slayer_cut": cut,
-                        "profit": profit
-                    }
-                    try:
-                        resp = requests.post(GAS_URL, json=payload)
-                        if resp.status_code == 200:
-                            st.success(f"報單成功！薪資 NT$ {cut} 已計入。")
-                            st.balloons()
-                        else: st.error("同步失敗")
-                    except: st.error("連連線異常")
+        # --- 外部表單邏輯 (實現即時金額變動) ---
+        c1, c2, c3 = st.columns(3)
+        order_date = c1.date_input("日期", datetime.now())
+        slayer_id = c2.text_input("打手 ID", value=user_id, disabled=True)
+        rate_label = c3.text_input("分潤比例", value=f"{int(user_rate*100)}%", disabled=True)
+        
+        c4, c5, c5_time = st.columns([2, 3, 1])
+        cust_id = c4.text_input("老闆 ID (必填)")
+        item_selected = c5.selectbox("選擇護航項目", list(ITEMS_DATA.keys()))
+        duration = c5_time.number_input("時數/次數", min_value=1, value=1)
+        
+        c6, c7, c8 = st.columns(3)
+        base_price = ITEMS_DATA[item_selected]
+        discount = c6.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
+        
+        # 智能計算成交價
+        final_price_calc = (base_price * duration) - discount
+        # 顯示最終成交價 (使用標籤而不是輸入框，更直觀)
+        c7.write("最終成交價 (自動算好)")
+        c7.subheader(f"$ {final_price_calc}")
+        
+        # 結算薪資
+        cut = int(final_price_calc * user_rate)
+        profit = final_price_calc - cut
+        c8.metric("預估結算 (打手薪資)", f"NT$ {cut}")
+        
+        remark = st.text_area("備註")
+        
+        if st.button("🚀 確認提交報單"):
+            if not cust_id:
+                st.error("請填寫老闆 ID！")
+            else:
+                payload = {
+                    "date": order_date.strftime("%Y-%m-%d"),
+                    "slayer_id": user_id,
+                    "rate_type": f"{int(user_rate*100)}%",
+                    "customer_id": cust_id,
+                    "item": f"{item_selected} (x{duration})",
+                    "price": final_price_calc,
+                    "discount": discount,
+                    "slayer_cut": cut,
+                    "profit": profit
+                }
+                try:
+                    resp = requests.post(GAS_URL, json=payload)
+                    if resp.status_code == 200:
+                        st.success("報單成功！")
+                        st.balloons()
+                    else: st.error("同步失敗")
+                except: st.error("連線異常")
 
         st.divider()
         st.subheader("📅 我的報單歷史")
