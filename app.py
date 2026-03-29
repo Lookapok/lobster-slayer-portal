@@ -43,50 +43,46 @@ if 'user_type' not in st.session_state:
 if st.session_state['user_type'] is None:
     st.title("🦞 龍蝦門戶 - 登入系統")
     login_type = st.selectbox("請選擇登入身分", ["管理員 (Admin)", "打手 (Slayer)"])
-    
     if login_type == "管理員 (Admin)":
         password = st.text_input("輸入管理密碼", type="password")
-        if st.button("管理員登入"):
+        if st.button("登入"):
             if password == "dk888":
-                st.session_state['user_type'] = "admin"
-                st.rerun()
-            else:
-                st.error("密碼錯誤！")
+                st.session_state['user_type'] = "admin"; st.rerun()
+            else: st.error("密碼錯誤！")
     else:
         player_id = st.text_input("輸入您的 打手 ID")
         player_pwd = st.text_input("輸入您的 打手 密碼", type="password")
-        if st.button("打手登入"):
+        if st.button("登入"):
             staff_df = get_staff_data()
             if not staff_df.empty and player_id.strip() in staff_df['打手ID'].values:
                 player_info = staff_df[staff_df['打手ID'] == player_id.strip()].iloc[0]
                 rate_col = [c for c in staff_df.columns if '比例' in c][0]
                 if str(player_pwd).strip() == str(player_info.get('登入密碼', '1234')):
-                    st.session_state['user_type'] = "slayer"
-                    st.session_state['user_id'] = player_id.strip()
-                    st.session_state['user_rate'] = float(player_info[rate_col])
-                    st.rerun()
+                    st.session_state['user_type'] = "slayer"; st.session_state['user_id'] = player_id.strip()
+                    st.session_state['user_rate'] = float(player_info[rate_col]); st.rerun()
                 else: st.error("密碼錯誤！")
             else: st.error("找不到該打手 ID")
 else:
     user_type = st.session_state['user_type']
-    if st.sidebar.button("登出"):
-        st.session_state['user_type'] = None
-        st.rerun()
+    if st.sidebar.button("登出"): st.session_state['user_type'] = None; st.rerun()
 
     if user_type == "slayer":
         st.title(f"🛡️ 打手到帳 - {st.session_state['user_id']}")
         st.subheader("📝 提交新報單")
         with st.container():
-            r1c1, r1c2, r1c3 = st.columns(3)
+            # 第一排：隱藏分潤比例，只留日期和打手 ID
+            r1c1, r1c2 = st.columns(2)
             r1c1.text_input("日期", value=datetime.now().strftime("%Y/%m/%d"), disabled=True)
             r1c2.text_input("打手 ID", value=st.session_state['user_id'], disabled=True)
-            r1c3.text_input("分潤比例", value=f"{int(st.session_state['user_rate']*100)}%", disabled=True)
+            # 分潤比例已被隱藏
             
+            # 第二排：老闆 ID、護航項目、時數/次數
             r2c1, r2c2, r2c3 = st.columns([2, 4, 1])
             cust_id = r2c1.text_input("老闆 ID (必填)")
             item = r2c2.selectbox("選擇護航項目", list(ITEMS_DATA.keys()))
             dur = r2c3.number_input("時數/次數", min_value=1, value=1)
             
+            # 第三排：折扣、最終成交價、預估結算
             r3c1, r3c2, r3c3 = st.columns(3)
             disc = r3c1.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
             total_price = (ITEMS_DATA[item] * dur) - disc
@@ -104,30 +100,24 @@ else:
                     try:
                         requests.post(GAS_URL, json=payload, timeout=15)
                         st.success("報單成功！")
-                        st.balloons()
-                        time.sleep(1.5)
-                        st.rerun()
-                    except: st.error("連線超時，請檢查 Google Sheet")
+                        st.balloons(); time.sleep(1.5); st.rerun()
+                    except: st.error("連線超時")
 
-        st.divider()
-        st.subheader("📅 我的報單歷史紀錄")
-        ord_df = get_orders_data()
+        st.divider(); st.subheader("📅 我的報單歷史紀錄"); ord_df = get_orders_data()
         if not ord_df.empty:
-            st.dataframe(ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']], use_container_width=True)
+            my_df = ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']]
+            # 歷史紀錄中也隱藏分潤類型
+            display_cols = [c for c in my_df.columns if c != "分潤類型"]
+            st.dataframe(my_df[display_cols], use_container_width=True)
 
     elif user_type == "admin":
         st.title("🛡️ 老闆總控後台")
-        if st.sidebar.button("🔄 刷新雲端數據"): st.rerun()
         df = get_orders_data()
         if not df.empty:
             df['單價'] = pd.to_numeric(df['單價'], errors='coerce').fillna(0)
             df['公司利潤'] = pd.to_numeric(df['公司利潤'], errors='coerce').fillna(0)
-            df['結算金額'] = pd.to_numeric(df['結算金額'], errors='coerce').fillna(0)
             m1, m2, m3 = st.columns(3)
             m1.metric("今日總營收", f"${int(df['單價'].sum())}")
             m2.metric("總利潤", f"${int(df['公司利潤'].sum())}")
             m3.metric("總單量", f"{len(df)} 筆")
-            
-            st.divider()
-            st.subheader("📜 歷史全紀錄 (請直接在 Google Sheet 進行狀態更改)")
-            st.dataframe(df, use_container_width=True)
+            st.divider(); st.subheader("📜 歷史全紀錄"); st.dataframe(df, use_container_width=True)
