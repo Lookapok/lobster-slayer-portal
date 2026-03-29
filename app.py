@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import requests
+import time
 
 # 頁面配置 (鎖定黃金格式)
 st.set_page_config(page_title="小希｜三角洲撤離大師 - 專業報單門戶", layout="wide")
@@ -24,12 +25,14 @@ def get_staff_data():
     try:
         df = pd.read_csv(STAFF_URL)
         df.columns = df.columns.str.strip()
+        for col in df.columns: df[col] = df[col].astype(str).str.strip()
         return df
     except: return pd.DataFrame()
 
 def get_orders_data():
     try:
-        df = pd.read_csv(ORDERS_URL)
+        # 強制不使用緩存，抓取最新數據
+        df = pd.read_csv(f"{ORDERS_URL}&t={int(time.time())}")
         df.columns = df.columns.str.strip()
         return df
     except: return pd.DataFrame()
@@ -59,7 +62,7 @@ if st.session_state['user_type'] is None:
             else: st.error("找不到該打手 ID")
 else:
     user_type = st.session_state['user_type']
-    if st.sidebar.button("登出"): st.session_state['user_type'] = None; st.rerun()
+    if st.sidebar.button("登出系統"): st.session_state['user_type'] = None; st.rerun()
 
     if user_type == "slayer":
         st.title(f"🛡️ 打手對帳中心 - {st.session_state['user_id']}")
@@ -86,39 +89,46 @@ else:
                 else:
                     payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{int(st.session_state['user_rate']*100)}%", "customer_id": cust_id, "item": f"{item} (x{dur})", "price": total_price, "discount": disc, "slayer_cut": user_cut, "profit": total_price - user_cut}
                     try: 
-                        requests.post(GAS_URL, json=payload)
-                        st.success("報單成功！")
+                        requests.post(GAS_URL, json=payload, timeout=10)
+                        st.success("報單成功！已寫入雲端。")
                         st.balloons()
-                    except: st.error("同步失敗")
+                        time.sleep(1)
+                        st.rerun()
+                    except: st.error("同步失敗，請檢查網路連接")
         st.divider(); st.subheader("📅 我的報單歷史"); ord_df = get_orders_data()
-        if not ord_df.empty: st.dataframe(ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']], use_container_width=True)
+        if not ord_df.empty and '打手ID' in ord_df.columns:
+            st.dataframe(ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']], use_container_width=True)
 
     elif user_type == "admin":
         st.title("🛡️ 老闆總控後台")
+        if st.button("🔄 刷新雲端數據"): st.rerun()
         df = get_orders_data()
         if not df.empty:
             m1, m2, m3 = st.columns(3)
-            m1.metric("今日總利潤", f"${df['公司利潤'].sum()}")
-            m2.metric("待結算單數", len(df[df['結算狀態']=='待結算']))
-            m3.metric("總單量", len(df))
-            st.subheader("💸 發薪審核")
+            # 強制轉換數值欄位，避免統計報錯
+            df['單價'] = pd.to_numeric(df['單價'], errors='coerce').fillna(0)
+            df['公司利潤'] = pd.to_numeric(df['公司利潤'], errors='coerce').fillna(0)
+            df['結算金額'] = pd.to_numeric(df['結算金額'], errors='coerce').fillna(0)
+            
+            m1.metric("總營收 (流水)", f"${int(df['單價'].sum())}")
+            m2.metric("總利潤 (公司)", f"${int(df['公司利潤'].sum())}")
+            m3.metric("待結算單數", len(df[df['結算狀態']=='待結算']))
+            
+            st.subheader("💸 發薪審核 (待結算清單)")
             pending = df[df['結算狀態'] == '待結算']
             if not pending.empty:
                 for idx, row in pending.iterrows():
                     col1, col2 = st.columns([8, 2])
-                    # 強制轉型為字串以防匹配失敗
-                    display_text = f"📅 {row['日期']} | 👤 {row['打手ID']} | 💰 ${row['結算金額']} ({row['項目']})"
-                    col1.write(display_text)
-                    if col2.button(f"✅ 發薪", key=f"p_{idx}"):
+                    col1.write(f"📅 {row['日期']} | 👤 {row['打手ID']} | 💰 ${row['結算金額']} ({row['項目']})")
+                    if col2.button(f"✅ 確認發薪", key=f"pay_btn_{idx}"):
                         payload = {"action": "update_status", "date": str(row['日期']), "slayer_id": str(row['打手ID']), "customer_id": str(row['老闆ID']), "new_status": "已結算"}
                         try:
-                            resp = requests.post(GAS_URL, json=payload)
-                            if resp.text == "Updated":
-                                st.success(f"已發放 {row['打手ID']} 的薪資！")
-                                st.rerun()
-                            else:
-                                st.warning(f"Google 找不到這筆訂單: {resp.text}")
-                        except: st.error("連線 GAS 失敗")
+                            requests.post(GAS_URL, json=payload, timeout=10)
+                            st.success(f"已發放 {row['打手ID']} 薪資！系統正在更新...")
+                            time.sleep(1.5)
+                            st.rerun()
+                        except: st.error("發薪連線超時，請檢查 Google Sheet 狀態")
             else:
-                st.info("目前沒有待結算單子。")
-            st.divider(); st.subheader("歷史紀錄"); st.dataframe(df, use_container_width=True)
+                st.info("目前沒有待發薪資的單子。")
+            
+            st.divider(); st.subheader("📜 全服歷史紀錄"); st.dataframe(df, use_container_width=True)
