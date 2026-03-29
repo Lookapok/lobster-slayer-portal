@@ -23,7 +23,7 @@ ITEMS_DATA = {
 
 def get_staff_data():
     try:
-        df = pd.read_csv(f"{STAFF_URL}&cache={int(time.time())}")
+        df = pd.read_csv(f"{STAFF_URL}&t={int(time.time())}")
         df.columns = df.columns.str.strip()
         for col in df.columns: df[col] = df[col].astype(str).str.strip()
         return df
@@ -31,50 +31,62 @@ def get_staff_data():
 
 def get_orders_data():
     try:
-        df = pd.read_csv(f"{ORDERS_URL}&cache={int(time.time())}")
+        df = pd.read_csv(f"{ORDERS_URL}&t={int(time.time())}")
         df.columns = df.columns.str.strip()
         return df
     except: return pd.DataFrame()
 
-# 登入邏輯
+# 1. 登入系統
 if 'user_type' not in st.session_state:
     st.session_state['user_type'] = None
 
 if st.session_state['user_type'] is None:
     st.title("🦞 龍蝦門戶 - 登入系統")
-    login_type = st.selectbox("身分", ["管理員 (Admin)", "打手 (Slayer)"])
+    login_type = st.selectbox("請選擇登入身分", ["管理員 (Admin)", "打手 (Slayer)"])
+    
     if login_type == "管理員 (Admin)":
-        pwd_i = st.text_input("密碼", type="password")
-        if st.button("登入"):
-            if pwd_i == "dk888": st.session_state['user_type'] = "admin"; st.rerun()
-    else:
-        pid = st.text_input("打手 ID")
-        pwd = st.text_input("密碼", type="password")
-        if st.button("登入"):
-            staff_df = get_staff_data()
-            if pid in staff_df['打手ID'].astype(str).values:
-                user_row = staff_df[staff_df['打手ID'].astype(str) == pid].iloc[0]
-                rate_col = [c for c in staff_df.columns if '比例' in c][0]
-                st.session_state['user_type'] = "slayer"; st.session_state['user_id'] = pid
-                st.session_state['user_rate'] = float(user_row[rate_col])
+        password = st.text_input("輸入管理密碼", type="password")
+        if st.button("管理員登入"):
+            if password == "dk888":
+                st.session_state['user_type'] = "admin"
                 st.rerun()
+            else:
+                st.error("密碼錯誤！")
+    else:
+        player_id = st.text_input("輸入您的 打手 ID")
+        player_pwd = st.text_input("輸入您的 打手 密碼", type="password")
+        if st.button("打手登入"):
+            staff_df = get_staff_data()
+            if not staff_df.empty and player_id.strip() in staff_df['打手ID'].values:
+                player_info = staff_df[staff_df['打手ID'] == player_id.strip()].iloc[0]
+                rate_col = [c for c in staff_df.columns if '比例' in c][0]
+                if str(player_pwd).strip() == str(player_info.get('登入密碼', '1234')):
+                    st.session_state['user_type'] = "slayer"
+                    st.session_state['user_id'] = player_id.strip()
+                    st.session_state['user_rate'] = float(player_info[rate_col])
+                    st.rerun()
+                else: st.error("密碼錯誤！")
             else: st.error("找不到該打手 ID")
 else:
     user_type = st.session_state['user_type']
-    if st.sidebar.button("登出系統"): st.session_state['user_type'] = None; st.rerun()
+    if st.sidebar.button("登出"):
+        st.session_state['user_type'] = None
+        st.rerun()
 
     if user_type == "slayer":
-        st.title(f"🛡️ 打手對帳中心 - {st.session_state['user_id']}")
+        st.title(f"🛡️ 打手到帳 - {st.session_state['user_id']}")
         st.subheader("📝 提交新報單")
         with st.container():
             r1c1, r1c2, r1c3 = st.columns(3)
-            r1c1.text_input("日期", value=datetime.now().strftime("%Y-%m-%d"), disabled=True)
+            r1c1.text_input("日期", value=datetime.now().strftime("%Y/%m/%d"), disabled=True)
             r1c2.text_input("打手 ID", value=st.session_state['user_id'], disabled=True)
             r1c3.text_input("分潤比例", value=f"{int(st.session_state['user_rate']*100)}%", disabled=True)
+            
             r2c1, r2c2, r2c3 = st.columns([2, 4, 1])
             cust_id = r2c1.text_input("老闆 ID (必填)")
             item = r2c2.selectbox("選擇護航項目", list(ITEMS_DATA.keys()))
             dur = r2c3.number_input("時數/次數", min_value=1, value=1)
+            
             r3c1, r3c2, r3c3 = st.columns(3)
             disc = r3c1.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
             total_price = (ITEMS_DATA[item] * dur) - disc
@@ -82,52 +94,40 @@ else:
             user_cut = int(total_price * st.session_state['user_rate'])
             r3c3.write("預估結算 (打手薪資)")
             r3c3.subheader(f"NT$ {user_cut}")
+            
             remark = st.text_area("備註")
+            
             if st.button("🚀 確認提交報單"):
                 if not cust_id: st.error("請填寫老闆 ID")
                 else:
                     payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{int(st.session_state['user_rate']*100)}%", "customer_id": cust_id, "item": f"{item} (x{dur})", "price": total_price, "discount": disc, "slayer_cut": user_cut, "profit": total_price - user_cut}
-                    try: 
+                    try:
                         requests.post(GAS_URL, json=payload, timeout=15)
                         st.success("報單成功！")
                         st.balloons()
-                        time.sleep(2)
+                        time.sleep(1.5)
                         st.rerun()
-                    except: st.error("同步失敗，請刷新網頁再試")
-        st.divider(); st.subheader("📅 我的報單歷史"); ord_df = get_orders_data()
-        if not ord_df.empty and '打手ID' in ord_df.columns:
+                    except: st.error("連線超時，請檢查 Google Sheet")
+
+        st.divider()
+        st.subheader("📅 我的報單歷史紀錄")
+        ord_df = get_orders_data()
+        if not ord_df.empty:
             st.dataframe(ord_df[ord_df['打手ID'].astype(str)==st.session_state['user_id']], use_container_width=True)
 
     elif user_type == "admin":
         st.title("🛡️ 老闆總控後台")
-        if st.button("🔄 刷新雲端數據"): st.rerun()
+        if st.sidebar.button("🔄 刷新雲端數據"): st.rerun()
         df = get_orders_data()
         if not df.empty:
             df['單價'] = pd.to_numeric(df['單價'], errors='coerce').fillna(0)
             df['公司利潤'] = pd.to_numeric(df['公司利潤'], errors='coerce').fillna(0)
             df['結算金額'] = pd.to_numeric(df['結算金額'], errors='coerce').fillna(0)
             m1, m2, m3 = st.columns(3)
-            m1.metric("總營收 (流水)", f"${int(df['單價'].sum())}")
-            m2.metric("總利潤 (公司)", f"${int(df['公司利潤'].sum())}")
-            m3.metric("待結算單數", len(df[df['結算狀態']=='待結算']))
+            m1.metric("今日總營收", f"${int(df['單價'].sum())}")
+            m2.metric("總利潤", f"${int(df['公司利潤'].sum())}")
+            m3.metric("總單量", f"{len(df)} 筆")
             
-            st.subheader("💸 發薪審核 (待結算清單)")
-            # 這裡進行強化：如果點擊後超時，網頁不跳錯，而是提示您去查看 Sheet
-            pending = df[df['結算狀態'] == '待結算']
-            if not pending.empty:
-                for idx, row in pending.iterrows():
-                    col1, col2 = st.columns([8, 2])
-                    col1.write(f"📅 {row['日期']} | 👤 {row['打手ID']} | 💰 ${row['結算金額']} ({row['項目']})")
-                    if col2.button(f"✅ 確認發薪", key=f"pay_btn_{idx}"):
-                        payload = {"action": "update_status", "date": str(row['日期']), "slayer_id": str(row['打手ID']), "customer_id": str(row['老闆ID']), "new_status": "已結算"}
-                        try:
-                            # 增加超時時間並忽略回傳錯誤，因為 Sheet 端高機率已經改好了
-                            requests.post(GAS_URL, json=payload, timeout=20)
-                            st.success("指令已送達 Google，正在同步狀態...")
-                        except:
-                            st.warning("Google 回應較慢，請點選下方的『刷新數據』確認狀態。")
-                        time.sleep(2)
-                        st.rerun()
-            else:
-                st.info("目前沒有待發薪資的單子。")
-            st.divider(); st.subheader("📜 全服歷史紀錄"); st.dataframe(df, use_container_width=True)
+            st.divider()
+            st.subheader("📜 歷史全紀錄 (請直接在 Google Sheet 進行狀態更改)")
+            st.dataframe(df, use_container_width=True)
