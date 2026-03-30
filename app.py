@@ -46,6 +46,12 @@ PRICING_DATA = {
             "陸服-進階保底 ($2,800)": 2800
         }
     },
+    "趣味單": {
+        "活動預留": {
+            "趣味單項目A (預留)": 0,
+            "趣味單項目B (預留)": 0
+        }
+    },
     "自定義單": {
         "手動輸入": {
             "自定義報價單": 0
@@ -112,7 +118,7 @@ else:
             # --- 分類選擇邏輯 ---
             r2c1, r2c2, r2c3, r2c4 = st.columns([2, 2, 2, 3])
             cust_id = r2c1.text_input("老闆 ID (必填)")
-            type_lvl1 = r2c2.selectbox("單量類型", ["體驗單", "護航單", "自定義單"])
+            type_lvl1 = r2c2.selectbox("單量類型", ["體驗單", "護航單", "趣味單", "自定義單"])
             
             if type_lvl1 == "體驗單":
                 region = r2c3.selectbox("區域", ["台服", "陸服"])
@@ -120,6 +126,9 @@ else:
             elif type_lvl1 == "護航單":
                 map_lvl = r2c3.selectbox("地圖等級", ["常規", "機密", "絕密"])
                 item_options = PRICING_DATA["護航單"][map_lvl]
+            elif type_lvl1 == "趣味單":
+                st.info("💡 趣味單模式預留中...")
+                item_options = PRICING_DATA["趣味單"]["活動預留"]
             else:
                 r2c3.write("自行填寫金額")
                 item_options = PRICING_DATA["自定義單"]["手動輸入"]
@@ -130,8 +139,8 @@ else:
             r3c1, r3c2, r3c3, r3c4 = st.columns([1, 2, 2, 2])
             dur = r3c1.number_input("時數/次數", min_value=1, value=1)
             
-            # 如果是自定義單，開放單價輸入；否則自動帶入
-            if type_lvl1 == "自定義單":
+            # 如果是自定義單或趣味單，開放單價輸入；否則自動帶入
+            if type_lvl1 in ["自定義單", "趣味單"]:
                 base_p = r3c2.number_input("單價 (手動填寫)", min_value=0, value=0)
                 disc = r3c3.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
             else:
@@ -145,20 +154,21 @@ else:
             
             # 核心公式：單價 * 時數 - 折扣
             total_price = (base_p * dur) - disc
-            user_cut = int(total_price * st.session_state['user_rate'])
+            # 雙人護航邏輯：單人薪資 = (總金額 * 分潤比例) / 2
+            user_cut = int((total_price * st.session_state['user_rate']) / 2)
             
-            if type_lvl1 == "自定義單":
-                r3c4.metric("預估結算 (您的薪資)", f"NT$ {user_cut}")
+            if type_lvl1 in ["自定義單", "趣味單"]:
+                r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
             else:
-                r3c3.number_input("最終成交價 (自動算好)", value=total_price, disabled=True)
-                r3c4.metric("預估結算 (您的薪資)", f"NT$ {user_cut}")
+                r3c3.number_input("最終成交總價", value=total_price, disabled=True)
+                r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
             
             remark = st.text_area("備註")
             
             if st.button("🚀 確認提交報單"):
                 if not cust_id: st.error("請填寫老闆 ID")
                 else:
-                    payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{st.session_state.get('user_tier', '普通')}({int(st.session_state['user_rate']*100)}%)", "customer_id": cust_id, "item": f"{item_name} x{dur}", "price": total_price, "discount": disc, "slayer_cut": user_cut, "profit": total_price - user_cut}
+                    payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{st.session_state.get('user_tier', '普通')}({int(st.session_state['user_rate']*100)}%)", "customer_id": cust_id, "item": f"{item_name} x{dur}", "price": total_price, "discount": disc, "slayer_cut": user_cut, "profit": total_price - (user_cut * 2)}
                     try: requests.post(GAS_URL, json=payload, timeout=15); st.success("報單成功！"); st.balloons(); time.sleep(1.5); st.rerun()
                     except: st.error("同步失敗")
 
