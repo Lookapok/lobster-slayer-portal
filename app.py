@@ -137,14 +137,18 @@ else:
             r3c1, r3c2, r3c3, r3c4 = st.columns([1, 2, 2, 2])
             dur = r3c1.number_input("時數/次數", min_value=1, value=1)
             
-            # 如果是自定義單或趣味單，開放單價輸入；否則自動帶入
-            if type_lvl1 in ["自定義單", "趣味單"]:
+            # 如果是自定義單，才固定為 0；趣味單和其他單從定價表讀取
+            if type_lvl1 == "自定義單":
                 base_p = 0
+            else:
+                base_p = item_options[item_name]
+            
+            # 折扣選擇邏輯
+            if type_lvl1 in ["自定義單", "趣味單"]:
                 disc_rate = r3c3.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
                 disc_map = {"沒有折扣": 1.0, "8折": 0.8, "85折": 0.85, "9折": 0.9}
                 disc = disc_map[disc_rate]
             else:
-                base_p = item_options[item_name]
                 # 階級加乘邏輯
                 tier = st.session_state.get('user_tier', '普通')
                 if "計時" in item_name:
