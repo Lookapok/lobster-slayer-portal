@@ -156,11 +156,8 @@ else:
             
             # 核心公式：單價 * 時數 * 折扣百分比
             total_price = int(base_p * dur * disc)
-            # 薪資計算：趣味單不除以2，其他單除以2
-            if type_lvl1 == "趣味單":
-                user_cut = int(total_price * st.session_state['user_rate'])
-            else:
-                user_cut = int((total_price * st.session_state['user_rate']) / 2)
+            # 雙人護航邏輯：單人薪資 = (總金額 * 分潤比例) / 2
+            user_cut = int((total_price * st.session_state['user_rate']) / 2)
             
             if type_lvl1 in ["自定義單", "趣味單"]:
                 r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
