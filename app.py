@@ -140,8 +140,8 @@ else:
             # 如果是自定義單或趣味單，開放單價輸入；否則自動帶入
             if type_lvl1 in ["自定義單", "趣味單"]:
                 base_p = 0
-                disc_rate = r3c3.selectbox("折扣", ["8折", "85折", "9折"])
-                disc_map = {"8折": 0.8, "85折": 0.85, "9折": 0.9}
+                disc_rate = r3c3.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
+                disc_map = {"沒有折扣": 1.0, "8折": 0.8, "85折": 0.85, "9折": 0.9}
                 disc = disc_map[disc_rate]
             else:
                 base_p = item_options[item_name]
@@ -150,14 +150,17 @@ else:
                 if "計時" in item_name:
                     if tier == "魔王": base_p = 1200 if "台服" in item_name or "常規" in item_name else 1500
                     elif tier == "巔峰": base_p = 1500 if "台服" in item_name or "常規" in item_name else 1800
-                disc_rate = r3c2.selectbox("折扣", ["8折", "85折", "9折"])
-                disc_map = {"8折": 0.8, "85折": 0.85, "9折": 0.9}
+                disc_rate = r3c2.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
+                disc_map = {"沒有折扣": 1.0, "8折": 0.8, "85折": 0.85, "9折": 0.9}
                 disc = disc_map[disc_rate]
             
             # 核心公式：單價 * 時數 * 折扣百分比
             total_price = int(base_p * dur * disc)
-            # 雙人護航邏輯：單人薪資 = (總金額 * 分潤比例) / 2
-            user_cut = int((total_price * st.session_state['user_rate']) / 2)
+            # 薪資計算：趣味單不除以2，其他單除以2
+            if type_lvl1 == "趣味單":
+                user_cut = int(total_price * st.session_state['user_rate'])
+            else:
+                user_cut = int((total_price * st.session_state['user_rate']) / 2)
             
             if type_lvl1 in ["自定義單", "趣味單"]:
                 r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
