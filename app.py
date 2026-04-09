@@ -139,7 +139,7 @@ else:
             
             # 如果是自定義單或趣味單，開放單價輸入；否則自動帶入
             if type_lvl1 in ["自定義單", "趣味單"]:
-                base_p = r3c2.number_input("單價 (手動填寫)", min_value=0, value=0)
+                base_p = 0
                 disc_rate = r3c3.selectbox("折扣", ["8折", "85折", "9折"])
                 disc_map = {"8折": 0.8, "85折": 0.85, "9折": 0.9}
                 disc = disc_map[disc_rate]
