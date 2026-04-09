@@ -125,8 +125,8 @@ else:
                 map_lvl = r2c3.selectbox("地圖等級", ["常規", "機密", "絕密"])
                 item_options = PRICING_DATA["護航單"][map_lvl]
             elif type_lvl1 == "趣味單":
-                st.info("💡 趣味單模式預留中...")
-                item_options = PRICING_DATA["趣味單"]["活動預留"]
+                mood_type = r2c3.selectbox("趣味單類型", ["好感度累積"])
+                item_options = PRICING_DATA["趣味單"][mood_type]
             else:
                 r2c3.write("自行填寫金額")
                 item_options = PRICING_DATA["自定義單"]["手動輸入"]
