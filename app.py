@@ -140,7 +140,9 @@ else:
             # 如果是自定義單或趣味單，開放單價輸入；否則自動帶入
             if type_lvl1 in ["自定義單", "趣味單"]:
                 base_p = r3c2.number_input("單價 (手動填寫)", min_value=0, value=0)
-                disc = r3c3.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
+                disc_rate = r3c3.selectbox("折扣", ["8折", "85折", "9折"])
+                disc_map = {"8折": 0.8, "85折": 0.85, "9折": 0.9}
+                disc = disc_map[disc_rate]
             else:
                 base_p = item_options[item_name]
                 # 階級加乘邏輯
@@ -148,10 +150,12 @@ else:
                 if "計時" in item_name:
                     if tier == "魔王": base_p = 1200 if "台服" in item_name or "常規" in item_name else 1500
                     elif tier == "巔峰": base_p = 1500 if "台服" in item_name or "常規" in item_name else 1800
-                disc = r3c2.selectbox("折扣金額", [0, 50, 100, 150, 200, 300, 500])
+                disc_rate = r3c2.selectbox("折扣", ["8折", "85折", "9折"])
+                disc_map = {"8折": 0.8, "85折": 0.85, "9折": 0.9}
+                disc = disc_map[disc_rate]
             
-            # 核心公式：單價 * 時數 - 折扣
-            total_price = (base_p * dur) - disc
+            # 核心公式：單價 * 時數 * 折扣百分比
+            total_price = int(base_p * dur * disc)
             # 雙人護航邏輯：單人薪資 = (總金額 * 分潤比例) / 2
             user_cut = int((total_price * st.session_state['user_rate']) / 2)
             
@@ -166,7 +170,7 @@ else:
             if st.button("🚀 確認提交報單"):
                 if not cust_id: st.error("請填寫老闆 ID")
                 else:
-                    payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{st.session_state.get('user_tier', '普通')}({int(st.session_state['user_rate']*100)}%)", "customer_id": cust_id, "item": f"{item_name} x{dur}", "price": total_price, "discount": disc, "slayer_cut": user_cut, "profit": total_price - (user_cut * 2)}
+                    payload = {"date": datetime.now().strftime("%Y-%m-%d"), "slayer_id": st.session_state['user_id'], "rate_type": f"{st.session_state.get('user_tier', '普通')}({int(st.session_state['user_rate']*100)}%)", "customer_id": cust_id, "item": f"{item_name} x{dur}", "price": total_price, "discount": disc_rate, "slayer_cut": user_cut, "profit": total_price - (user_cut * 2)}
                     try: requests.post(GAS_URL, json=payload, timeout=15); st.success("報單成功！"); st.balloons(); time.sleep(1.5); st.rerun()
                     except: st.error("同步失敗")
 
