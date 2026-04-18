@@ -179,7 +179,7 @@ else:
                 disc = disc_map[disc_rate]
                 total_price = int(base_p * dur * disc)
                 user_cut = int((total_price * st.session_state['user_rate']) / 2)
-                r3c3.number_input("最終成交總價", value=total_price, disabled=True)
+                r3c3.metric("最終成交總價", f"NT$ {total_price}")
                 r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
             
             remark = st.text_area("備註")
