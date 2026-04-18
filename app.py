@@ -169,12 +169,21 @@ else:
                 dur = r3c1.number_input("時數/次數", min_value=1, value=1)
                 base_p = item_options[item_name]
                 
-                # 階級加乘邏輯
+                # 階級加成邏輯（魔王和巔峰可選）
                 tier = st.session_state.get('user_tier', '普通')
-                if "計時" in item_name:
-                    if tier == "魔王": base_p = 1200 if "台服" in item_name or "常規" in item_name else 1500
-                    elif tier == "巔峰": base_p = 1500 if "台服" in item_name or "常規" in item_name else 1800
-                disc_rate = r3c2.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
+                tier_multiplier = 1.0
+                if tier in ["魔王", "巔峰"]:
+                    apply_tier_bonus = r3c2.checkbox(f"✨ 使用 {tier} 加成")
+                    if apply_tier_bonus and "計時" in item_name:
+                        # 魔王或巔峰的計時加成
+                        tier_multiplier = 1.5 if tier == "魔王" else 1.875  # 魔王1200/800=1.5, 巔峰1500/800=1.875
+                        base_p = int(base_p * tier_multiplier)
+                    r3c3_col = r3c3
+                else:
+                    r3c3_col = r3c2
+                
+                # 折扣選擇
+                disc_rate = r3c3_col.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
                 disc_map = {"沒有折扣": 1.0, "8折": 0.8, "85折": 0.85, "9折": 0.9}
                 disc = disc_map[disc_rate]
                 total_price = int(base_p * dur * disc)
