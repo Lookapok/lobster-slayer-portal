@@ -121,34 +121,54 @@ else:
             if type_lvl1 == "體驗單":
                 region = r2c3.selectbox("區域", ["台服", "陸服"])
                 item_options = PRICING_DATA["體驗單"][region]
+                item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
             elif type_lvl1 == "護航單":
                 map_lvl = r2c3.selectbox("地圖等級", ["常規", "機密", "絕密"])
                 item_options = PRICING_DATA["護航單"][map_lvl]
+                item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
             elif type_lvl1 == "趣味單":
                 mood_type = r2c3.selectbox("趣味單類型", ["好感度累積"])
                 item_options = PRICING_DATA["趣味單"][mood_type]
+                item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
             else:
                 r2c3.write("自行填寫金額")
-                item_options = PRICING_DATA["自定義單"]["手動輸入"]
-            
-            item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
+                r2c4.write("")  # 自定義單不顯示項目選擇
+                item_name = "自定義報價單"
             
             # --- 金額計算邏輯 ---
-            r3c1, r3c2, r3c3, r3c4 = st.columns([1, 2, 2, 2])
-            dur = r3c1.number_input("時數/次數", min_value=1, value=1)
-            
-            # 如果是自定義單，才固定為 0；趣味單和其他單從定價表讀取
             if type_lvl1 == "自定義單":
-                base_p = 0
-            else:
-                base_p = item_options[item_name]
-            
-            # 折扣選擇邏輯
-            if type_lvl1 in ["自定義單", "趣味單"]:
-                disc_rate = r3c3.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
+                # 自定義單：單獨布局，價格手動輸入
+                r3c1, r3c2 = st.columns([2, 2])
+                dur = r3c1.number_input("時數/次數", min_value=1, value=1)
+                base_p = r3c2.number_input("單價 (NT$)", min_value=0, value=0)
+                
+                # 第二行：折扣和結果
+                r4c1, r4c2, r4c3 = st.columns([2, 2, 2])
+                disc_rate = r4c1.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
                 disc_map = {"沒有折扣": 1.0, "8折": 0.8, "85折": 0.85, "9折": 0.9}
                 disc = disc_map[disc_rate]
+                total_price = int(base_p * dur * disc)
+                user_cut = int((total_price * st.session_state['user_rate']) / 2)
+                r4c2.metric("最終總價", f"NT$ {total_price}")
+                r4c3.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
+            elif type_lvl1 == "趣味單":
+                # 趣味單：從定價表讀取，但允許折扣
+                r3c1, r3c2, r3c3 = st.columns([1, 2, 2])
+                dur = r3c1.number_input("時數/次數", min_value=1, value=1)
+                base_p = item_options[item_name]
+                disc_rate = r3c2.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
+                disc_map = {"沒有折扣": 1.0, "8折": 0.8, "85折": 0.85, "9折": 0.9}
+                disc = disc_map[disc_rate]
+                total_price = int(base_p * dur * disc)
+                user_cut = int((total_price * st.session_state['user_rate']) / 2)
+                r3c3.metric("最終總價", f"NT$ {total_price}")
+                st.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
             else:
+                # 體驗單、護航單：原有布局
+                r3c1, r3c2, r3c3, r3c4 = st.columns([1, 2, 2, 2])
+                dur = r3c1.number_input("時數/次數", min_value=1, value=1)
+                base_p = item_options[item_name]
+                
                 # 階級加乘邏輯
                 tier = st.session_state.get('user_tier', '普通')
                 if "計時" in item_name:
@@ -157,15 +177,8 @@ else:
                 disc_rate = r3c2.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
                 disc_map = {"沒有折扣": 1.0, "8折": 0.8, "85折": 0.85, "9折": 0.9}
                 disc = disc_map[disc_rate]
-            
-            # 核心公式：單價 * 時數 * 折扣百分比
-            total_price = int(base_p * dur * disc)
-            # 雙人護航邏輯：單人薪資 = (總金額 * 分潤比例) / 2
-            user_cut = int((total_price * st.session_state['user_rate']) / 2)
-            
-            if type_lvl1 in ["自定義單", "趣味單"]:
-                r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
-            else:
+                total_price = int(base_p * dur * disc)
+                user_cut = int((total_price * st.session_state['user_rate']) / 2)
                 r3c3.number_input("最終成交總價", value=total_price, disabled=True)
                 r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
             
