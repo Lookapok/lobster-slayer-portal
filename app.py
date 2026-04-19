@@ -48,6 +48,9 @@ PRICING_DATA = {
     "趣味單": {
         "好感度累積": {
             "好感度累積單 ($2,500) 保1688W": 2500
+        },
+        "大富翁": {
+            "大富翁 ($2,800) 保1888W": 2800
         }
     },
     "自定義單": {
@@ -127,7 +130,7 @@ else:
                 item_options = PRICING_DATA["護航單"][map_lvl]
                 item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
             elif type_lvl1 == "趣味單":
-                mood_type = r2c3.selectbox("趣味單類型", ["好感度累積"])
+                mood_type = r2c3.selectbox("趣味單類型", ["好感度累積", "大富翁"])
                 item_options = PRICING_DATA["趣味單"][mood_type]
                 item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
             else:
@@ -176,7 +179,10 @@ else:
                     apply_tier_bonus = r3c2.checkbox(f"✨ 使用 {tier} 加成")
                     if apply_tier_bonus and "計時" in item_name:
                         # 魔王或巔峰的計時加成
-                        tier_multiplier = 1.5 if tier == "魔王" else 1.875  # 魔王1200/800=1.5, 巔峰1500/800=1.875
+                        if tier == "魔王":
+                            tier_multiplier = 1.5  # 800→1200, 1000→1500
+                        else:  # 巔峰
+                            tier_multiplier = 1.875 if "台服" in item_name else 1.8  # 台服800→1500, 陸服1000→1800
                         base_p = int(base_p * tier_multiplier)
                     r3c3_col = r3c3
                 else:
