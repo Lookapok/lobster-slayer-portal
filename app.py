@@ -16,7 +16,7 @@ GAS_URL = "https://script.google.com/macros/s/AKfycbz2BdC_RM2iq6xVSzZfT1dHMPmGH7
 PRICING_DATA = {
     "體驗單": {
         "台服": {
-            "體驗單：$400 (788W)": 400,
+            "體驗單：$400 (588W)": 400,
             "體驗單：$800 (1088W)": 800
         },
         "陸服": {
@@ -26,23 +26,31 @@ PRICING_DATA = {
         }
     },
     "護航單": {
-        "常規": {
-            "台服-計時 ($800)": 800,
-            "陸服-計時 ($1,000)": 1000
+        "台服": {
+            "機密": {
+                "娛樂雙陪 ($600)": 600,
+                "技術雙護 ($800)": 800
+            },
+            "絕密": {
+                "娛樂雙陪 ($800)": 800,
+                "技術雙護 ($1,200)": 1200,
+                "基礎保底 ($1,200)": 1200,
+                "進階保底 ($2,600)": 2600
+            }
         },
-        "機密": {
-            "台服-計時 ($800)": 800,
-            "台服-基礎保底 ($800)": 800,
-            "陸服-計時 ($1,000)": 1000,
-            "陸服-基礎保底 ($1,000)": 1000
-        },
-        "絕密": {
-            "台服-計時 ($1,000)": 1000,
-            "台服-基礎保底 ($1,200)": 1200,
-            "台服-進階保底 ($2,600)": 2600,
-            "陸服-計時 ($1,200)": 1200,
-            "陸服-基礎保底 ($1,400)": 1400,
-            "陸服-進階保底 ($2,800)": 2800
+        "陸服": {
+            "機密": {
+                "娛樂雙陪 ($700)": 700,
+                "巔峰雙護 ($1,000)": 1000,
+                "魔王雙護 ($1,300)": 1300
+            },
+            "絕密": {
+                "娛樂雙陪 ($800)": 800,
+                "巔峰雙護 ($1,200)": 1200,
+                "魔王雙護 ($1,500)": 1500,
+                "基礎保底 ($1,400)": 1400,
+                "進階保底 ($2,800)": 2800
+            }
         }
     },
     "趣味單": {
@@ -126,9 +134,10 @@ else:
                 item_options = PRICING_DATA["體驗單"][region]
                 item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
             elif type_lvl1 == "護航單":
-                map_lvl = r2c3.selectbox("地圖等級", ["常規", "機密", "絕密"])
-                item_options = PRICING_DATA["護航單"][map_lvl]
-                item_name = r2c4.selectbox("護航項目", list(item_options.keys()))
+                region = r2c3.selectbox("區域", ["台服", "陸服"])
+                map_lvl = r2c4.selectbox("地圖等級", list(PRICING_DATA["護航單"][region].keys()))
+                item_options = PRICING_DATA["護航單"][region][map_lvl]
+                item_name = st.selectbox("護航項目", list(item_options.keys()))
             elif type_lvl1 == "趣味單":
                 mood_type = r2c3.selectbox("趣味單類型", ["好感度累積", "大富翁"])
                 item_options = PRICING_DATA["趣味單"][mood_type]
@@ -174,16 +183,16 @@ else:
                 
                 # 階級加成邏輯（魔王和巔峰可選）
                 tier = st.session_state.get('user_tier', '普通')
-                tier_multiplier = 1.0
+                tier_bonus = 0
                 if tier in ["魔王", "巔峰"]:
                     apply_tier_bonus = r3c2.checkbox(f"✨ 使用 {tier} 加成")
                     if apply_tier_bonus and "計時" in item_name:
                         # 魔王或巔峰的計時加成
                         if tier == "魔王":
-                            tier_multiplier = 1.5  # 800→1200, 1000→1500
+                            tier_bonus = 300  # 加 NT$300
                         else:  # 巔峰
-                            tier_multiplier = 1.875 if "台服" in item_name else 1.8  # 台服800→1500, 陸服1000→1800
-                        base_p = int(base_p * tier_multiplier)
+                            tier_bonus = 500 if "台服" in item_name else 400  # 台服加500, 陸服加400
+                        base_p = base_p + tier_bonus
                     r3c3_col = r3c3
                 else:
                     r3c3_col = r3c2
