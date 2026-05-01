@@ -181,27 +181,18 @@ else:
                 dur = r3c1.number_input("時數/次數", min_value=1, value=1)
                 base_p = item_options[item_name]
                 
-                # 階級加成邏輯（魔王和巔峰可選）
-                tier = st.session_state.get('user_tier', '普通')
-                tier_bonus = 0
-                if tier in ["魔王", "巔峰"]:
-                    apply_tier_bonus = r3c2.checkbox(f"✨ 使用 {tier} 加成")
-                    if apply_tier_bonus and "計時" in item_name:
-                        # 魔王或巔峰的計時加成
-                        if tier == "魔王":
-                            tier_bonus = 300  # 加 NT$300
-                        else:  # 巔峰
-                            tier_bonus = 500 if "台服" in item_name else 400  # 台服加500, 陸服加400
-                        base_p = base_p + tier_bonus
-                    r3c3_col = r3c3
-                else:
-                    r3c3_col = r3c2
-                
                 # 折扣選擇
+                r3c3_col = r3c3
                 disc_rate = r3c3_col.selectbox("折扣", ["沒有折扣", "8折", "85折", "9折"])
                 disc_map = {"沒有折扣": 1.0, "8折": 0.8, "85折": 0.85, "9折": 0.9}
                 disc = disc_map[disc_rate]
                 total_price = int(base_p * dur * disc)
+                
+                # 包卡加成邏輯（加到最終成交總價）
+                add_card_service = r3c2.checkbox("📦 包卡服務 (+$50)")
+                if add_card_service:
+                    total_price = total_price + 50  # 加 NT$50 到成交總價
+                
                 user_cut = int((total_price * st.session_state['user_rate']) / 2)
                 r3c3.metric("最終成交總價", f"NT$ {total_price}")
                 r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
