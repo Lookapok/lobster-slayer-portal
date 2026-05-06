@@ -188,12 +188,11 @@ else:
                 disc = disc_map[disc_rate]
                 total_price = int(base_p * dur * disc)
                 
-                # 包卡加成邏輯（加到最終成交總價）
+                # 包卡加成邏輯（一人 NT$50，不除以2）
                 add_card_service = r3c2.checkbox("📦 包卡服務 (+$50)")
-                if add_card_service:
-                    total_price = total_price + 50  # 加 NT$50 到成交總價
+                card_bonus = 50 if add_card_service else 0
                 
-                user_cut = int((total_price * st.session_state['user_rate']) / 2)
+                user_cut = int((total_price * st.session_state['user_rate']) / 2) + card_bonus
                 r3c3.metric("最終成交總價", f"NT$ {total_price}")
                 r3c4.metric("單人薪資 (一人一半)", f"NT$ {user_cut}")
             
